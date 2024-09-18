@@ -4,6 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 import json
 import pickle
+import os
 import sys
 import inspect
 
@@ -37,9 +38,22 @@ _folder_name_pp2 = "post_processing_with_PI"
 _folder_name_pp3 = "post_processing_chillplus"
 _path_data_dir = Path("./data")
 
+run_env = os.environ.get("RUN_ENVIRONMENT")
+if run_env == "wsl":
+    home_path = Path("f/home/qinmian")
+elif run_env == "server":
+    home_path = Path("f/home/mianqin")
+else:
+    raise RuntimeError("Unknown environment.")
 
-def _load_params(rho):
-    data_dir = Path(f"/home/qinmian/data/gromacs/pseudoice/data/{rho}/prd/melting/result")
+
+def _get_root_dir(rho, process) -> Path:
+    root_dir = home_path / f"data/gromacs/pseudoice/data/{rho}/prd/{process}"
+    return root_dir
+
+
+def _load_params(rho, process):
+    data_dir = _get_root_dir(rho, process)
     with open(data_dir / _filename_job_params) as file:
         job_params = json.load(file)
     return job_params
@@ -211,30 +225,26 @@ def correct_ice_index(path_to_conf: Path, path_to_traj: Path, path_to_index: Pat
     return new_ice_index_dict, new_water_index_dict
 
 
-def main_mean_interface(rho):
-    job_params = _load_params(rho)
-    data_dir = Path(f"/home/qinmian/data/gromacs/pseudoice/data/{rho}/prd/melting/result")
-    u = mda.Universe(data_dir / "conf.gro")
+def main_mean_interface(rho, process):
+    job_params = _load_params(rho, process)
+    result_dir = _get_root_dir(rho, process) / "result"
+    u = mda.Universe(result_dir / "conf.gro")
     x_max, y_max, z_max = u.dimensions[:3]
     x_range, y_range, z_range = (0, x_max), (0, y_max), (20, 65)
     pos_grid, scale, offset = generate_grid(x_range, y_range, z_range, n_x=50, n_y=50, n_z=40)
     for key, value in job_params.items():
-        # if key != "op_1800":
-        #     continue
         op = int(key.split("_")[1])
-        if op < 1500:
-            continue
         print(key)
-        u = mda.Universe(data_dir / "conf.gro", data_dir / key / "trajout.xtc")
-        solid_like_atoms_dict = _filter_solid_like_atoms(read_solid_like_atoms(data_dir / key / _filename_index4))
+        u = mda.Universe(result_dir / "conf.gro", result_dir / key / "trajout.xtc")
+        solid_like_atoms_dict = _filter_solid_like_atoms(read_solid_like_atoms(result_dir / key / _filename_index4))
         nodes, faces = calc_mean_interface_in_t_range(u, solid_like_atoms_dict, pos_grid, scale, offset, (2200, 5000))
-        with open(data_dir / key / "interface.pickle", "wb") as file:
+        with open(result_dir / key / "interface.pickle", "wb") as file:
             pickle.dump([nodes, faces], file)
 
 
-def post_processing_chillplus(rho):
-    job_params = _load_params(rho)
-    root_dir = Path(f"/home/qinmian/data/gromacs/pseudoice/data/{rho}/prd/melting/")
+def post_processing_chillplus(rho, process):
+    job_params = _load_params(rho, process)
+    root_dir = _get_root_dir(rho, process)
     for job_name in job_params:
         data_dir = root_dir / "data" / job_name / _folder_name_pp3
         ice_index_dict = combine_indices(data_dir)
@@ -242,9 +252,9 @@ def post_processing_chillplus(rho):
         write_index_dict(ice_index_dict, save_path)
 
 
-def post_processing_with_PI(rho):
-    job_params = _load_params(rho)
-    root_dir = Path(f"/home/qinmian/data/gromacs/pseudoice/data/{rho}/prd/melting/")
+def post_processing_with_PI(rho, process):
+    job_params = _load_params(rho, process)
+    root_dir = _get_root_dir(rho, process)
     for job_name in job_params:
         data_dir = root_dir / "data" / job_name / _folder_name_pp2
         solid_like_atoms_dict = _filter_solid_like_atoms(read_solid_like_atoms(data_dir / _filename_index))
@@ -252,9 +262,9 @@ def post_processing_with_PI(rho):
         write_index_dict(solid_like_atoms_dict, save_path)
 
 
-def main_correct_ice_index(rho):
-    job_params = _load_params(rho)
-    root_dir = Path(f"/home/qinmian/data/gromacs/pseudoice/data/{rho}/prd/melting/")
+def main_correct_ice_index(rho, process):
+    job_params = _load_params(rho, process)
+    root_dir = _get_root_dir(rho, process)
     result_dir = root_dir / "result"
     for job_name in reversed(job_params):
         # if job_name != "op_1200":
@@ -288,9 +298,9 @@ def _get_water_index(indices: list[str]):
     return water_index
 
 
-def main_write_water_index(rho):
-    job_params = _load_params(rho)
-    root_dir = Path(f"/home/qinmian/data/gromacs/pseudoice/data/{rho}/prd/melting/")
+def main_write_water_index(rho, process):
+    job_params = _load_params(rho, process)
+    root_dir = _get_root_dir(rho, process)
     result_dir = root_dir / "result"
     for job_name in job_params:
         # if job_name != "op_1200":
@@ -308,17 +318,13 @@ def main_write_water_index(rho):
 
 
 def main():
-    # main_mean_interface(1.0)
-    for rho in [0.25, 0.5, 0.75, 1.0]:
+    process = "icing"
+    for rho in [0.75, 0.8]:
         print(f"rho = {rho}")
-        post_processing_chillplus(rho)
-        # main_correct_ice_index(rho)
-        # main_write_water_index(rho)
+        # post_processing_chillplus(rho, process)
+        main_correct_ice_index(rho, process)
+        main_write_water_index(rho, process)
         # main_mean_interface(rho)
-    # rho = 0.25
-    # # post_processing_chillplus(rho)
-    # main_correct_ice_index(rho)
-    # main_write_water_index(rho)
 
 
 if __name__ == "__main__":
