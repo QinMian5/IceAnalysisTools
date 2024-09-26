@@ -40,11 +40,11 @@ _path_data_dir = Path("./data")
 
 run_env = os.environ.get("RUN_ENVIRONMENT")
 if run_env == "wsl":
-    home_path = Path("f/home/qinmian")
-elif run_env == "server":
-    home_path = Path("f/home/mianqin")
+    home_path = Path("/home/qinmian")
+elif run_env == "chestnut":
+    home_path = Path("/home/mianqin")
 else:
-    raise RuntimeError("Unknown environment.")
+    home_path = Path("/home/qinmian")
 
 
 def _get_root_dir(rho, process) -> Path:
@@ -237,7 +237,7 @@ def main_mean_interface(rho, process):
         print(key)
         u = mda.Universe(result_dir / "conf.gro", result_dir / key / "trajout.xtc")
         solid_like_atoms_dict = _filter_solid_like_atoms(read_solid_like_atoms(result_dir / key / _filename_index4))
-        nodes, faces = calc_mean_interface_in_t_range(u, solid_like_atoms_dict, pos_grid, scale, offset, (2200, 5000))
+        nodes, faces = calc_mean_interface_in_t_range(u, solid_like_atoms_dict, pos_grid, scale, offset, (2200, 10000))
         with open(result_dir / key / "interface.pickle", "wb") as file:
             pickle.dump([nodes, faces], file)
 
@@ -318,13 +318,14 @@ def main_write_water_index(rho, process):
 
 
 def main():
-    process = "icing"
-    for rho in [0.75, 0.8]:
-        print(f"rho = {rho}")
-        # post_processing_chillplus(rho, process)
-        main_correct_ice_index(rho, process)
-        main_write_water_index(rho, process)
-        # main_mean_interface(rho)
+    process_list = ["icing_250"]
+    for rho in [0.75]:
+        for process in process_list:
+            print(f"rho = {rho}, process = {process}")
+            # post_processing_chillplus(rho, process)
+            main_correct_ice_index(rho, process)
+            main_write_water_index(rho, process)
+            main_mean_interface(rho, process)
 
 
 if __name__ == "__main__":
