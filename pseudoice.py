@@ -44,7 +44,7 @@ if run_env == "wsl":
 elif run_env == "chestnut":
     home_path = Path("/home/mianqin")
 else:
-    home_path = Path("/home/qinmian")
+    raise RuntimeError(f"Unknown environment: {run_env}")
 
 
 def _get_root_dir(rho, process) -> Path:
