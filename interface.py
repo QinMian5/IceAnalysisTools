@@ -75,7 +75,7 @@ def calc_mean_interface_in_t_range(u: mda.Universe, solid_like_atoms_dict: dict[
         -> tuple[NDArray[tuple[int, 3]], NDArray[tuple[int, 3]]]:
     acc_concentration = np.zeros(pos_grid.shape[:3])
     acc_n = 0
-    for ts in tqdm(u.trajectory[::10]):
+    for ts in tqdm(u.trajectory[::50]):
         t = ts.time
         if not t_range[0] <= t <= t_range[1]:
             continue

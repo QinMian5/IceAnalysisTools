@@ -43,9 +43,10 @@ if run_env == "wsl":
     home_path = Path("/home/qinmian")
 elif run_env == "chestnut":
     home_path = Path("/home/mianqin")
+elif run_env == "mianqin_PC":
+    home_path = Path("//wsl.localhost/Ubuntu-22.04/home/qinmian")
 else:
     raise RuntimeError(f"Unknown environment: {run_env}")
-
 
 def _get_root_dir(rho, process) -> Path:
     root_dir = home_path / f"data/gromacs/pseudoice/data/{rho}/prd/{process}"
@@ -174,7 +175,7 @@ def _correct_bulk(G: nx.Graph, max_iter=10) -> tuple[np.ndarray, np.ndarray]:
     return water_to_ice_array, ice_to_water_array
 
 
-def correct_ice_index(path_to_conf: Path, path_to_traj: Path, path_to_index: Path) -> tuple[dict, dict]:
+def correct_ice_index(path_to_conf: Path, path_to_traj: Path, path_to_index: Path, t_range: tuple) -> tuple[dict, dict]:
     u = mda.Universe(path_to_conf, path_to_traj)
     ice_index_dict = _filter_solid_like_atoms(read_solid_like_atoms(path_to_index))
     new_ice_index_dict = {}
@@ -182,7 +183,7 @@ def correct_ice_index(path_to_conf: Path, path_to_traj: Path, path_to_index: Pat
     for ts in tqdm(u.trajectory, desc="Frame"):
         # if f"{ts.time:.1f}" != "4020.0":
         #     continue
-        if ts.time < 2200:
+        if ts.time < t_range[0] or ts.time > t_range[1]:
             new_ice_index_dict[f"{ts.time:.1f}"] = []
             new_water_index_dict[f"{ts.time:.1f}"] = []
             continue
@@ -237,7 +238,10 @@ def main_mean_interface(rho, process):
         print(key)
         u = mda.Universe(result_dir / "conf.gro", result_dir / key / "trajout.xtc")
         solid_like_atoms_dict = _filter_solid_like_atoms(read_solid_like_atoms(result_dir / key / _filename_index4))
-        nodes, faces = calc_mean_interface_in_t_range(u, solid_like_atoms_dict, pos_grid, scale, offset, (2200, 10000))
+        t_start = job_params[key]["RAMP_TIME"] + 200
+        t_end = job_params[key]["RAMP_TIME"] + job_params[key]["PRD_TIME"]
+        t_range = (t_start, t_end)
+        nodes, faces = calc_mean_interface_in_t_range(u, solid_like_atoms_dict, pos_grid, scale, offset, t_range)
         with open(result_dir / key / "interface.pickle", "wb") as file:
             pickle.dump([nodes, faces], file)
 
@@ -277,7 +281,10 @@ def main_correct_ice_index(rho, process):
         save_path = root_dir / "result" / job_name / _filename_index4
         new_ice_save_path = job_dir / _filename_index_new_ice
         new_water_save_path = job_dir / _filename_index_new_water
-        new_ice_index_dict, new_water_index_dict = correct_ice_index(path_to_conf, path_to_traj, path_to_index)
+        t_start = job_params[job_name]["RAMP_TIME"] + 200
+        t_end = job_params[job_name]["RAMP_TIME"] + job_params[job_name]["PRD_TIME"]
+        t_range = (t_start, t_end)
+        new_ice_index_dict, new_water_index_dict = correct_ice_index(path_to_conf, path_to_traj, path_to_index, t_range)
         write_index_dict(new_ice_index_dict, new_ice_save_path)
         write_index_dict(new_water_index_dict, new_water_save_path)
 
@@ -318,7 +325,7 @@ def main_write_water_index(rho, process):
 
 
 def main():
-    process_list = ["icing_250"]
+    process_list = ["icing_constant_ramp_rate"]
     for rho in [0.75]:
         for process in process_list:
             print(f"rho = {rho}, process = {process}")
